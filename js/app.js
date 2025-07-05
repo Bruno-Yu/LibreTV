@@ -11,6 +11,12 @@ let currentVideoTitle = '';
 // 全局变量用于倒序状态
 let episodesReversed = false;
 
+// 分頁狀態
+let currentPage = 1;
+let totalPages = 1;
+let lastQuery = '';
+let lastResults = [];
+
 // 页面初始化
 document.addEventListener('DOMContentLoaded', function () {
     // 初始化API复选框
@@ -615,148 +621,171 @@ function getCustomApiInfo(customApiIndex) {
     return customAPIs[index];
 }
 
-// 搜索功能 - 修改为支持多选API和多页结果
-async function search() {
-    // 密码保护校验
+/**
+ * 渲染分頁按鈕
+ * @param {number} page 當前頁碼
+ * @param {number} total 總頁數
+ */
+function renderPagination(page, total) {
+    const pagination = document.getElementById('pagination');
+    if (!pagination) return;
+    if (total <= 1) {
+        pagination.innerHTML = '';
+        return;
+    }
+    let html = '';
+    // 上一頁
+    html += `<button class="px-3 py-1 rounded border border-gray-600 bg-[#222] text-white hover:bg-[#333] transition" ${page === 1 ? 'disabled' : ''} onclick="changePage(${page - 1})">上一頁</button>`;
+    // 頁碼
+    for (let i = 1; i <= total; i++) {
+        html += `<button class="px-3 py-1 rounded border ${i === page ? 'bg-blue-600 text-white' : 'bg-[#222] text-gray-300 hover:bg-[#333]'} transition mx-1" onclick="changePage(${i})">${i}</button>`;
+    }
+    // 下一頁
+    html += `<button class="px-3 py-1 rounded border border-gray-600 bg-[#222] text-white hover:bg-[#333] transition" ${page === total ? 'disabled' : ''} onclick="changePage(${page + 1})">下一頁</button>`;
+    pagination.innerHTML = html;
+}
+
+/**
+ * 切換分頁
+ * @param {number} page 目標頁碼
+ */
+function changePage(page) {
+    if (page < 1 || page > totalPages) return;
+    currentPage = page;
+    search(lastQuery, page);
+}
+
+// 修改 search 函數，支援分頁
+async function search(queryParam, pageParam) {
+    // 密碼保護校驗
     if (window.isPasswordProtected && window.isPasswordVerified) {
         if (window.isPasswordProtected() && !window.isPasswordVerified()) {
             showPasswordModal && showPasswordModal();
             return;
         }
     }
-    const query = document.getElementById('searchInput').value.trim();
-
+    let query = typeof queryParam === 'string' ? queryParam.trim() : document.getElementById('searchInput').value.trim();
+    // 新增：繁體轉簡體
+    if (window.zhconver && typeof window.zhconver.t2s === 'function') {
+        query = window.zhconver.t2s(query);
+    }
+    const page = typeof pageParam === 'number' ? pageParam : 1;
     if (!query) {
-        showToast('请输入搜索内容', 'info');
+        showToast('請輸入搜索內容', 'info');
         return;
     }
-
     if (selectedAPIs.length === 0) {
-        showToast('请至少选择一个API源', 'warning');
+        showToast('請至少選擇一個API源', 'warning');
         return;
     }
-
     showLoading();
-
     try {
-        // 保存搜索历史
+        // 保存搜尋歷史
         saveSearchHistory(query);
-
-        // 从所有选中的API源搜索
+        // 從所有選中的API源搜尋
         let allResults = [];
-        const searchPromises = selectedAPIs.map(apiId => 
-            searchByAPIAndKeyWord(apiId, query)
-        );
-
-        // 等待所有搜索请求完成
+        const searchPromises = selectedAPIs.map(apiId => searchByAPIAndKeyWord(apiId, query));
         const resultsArray = await Promise.all(searchPromises);
-
-        // 合并所有结果
         resultsArray.forEach(results => {
             if (Array.isArray(results) && results.length > 0) {
                 allResults = allResults.concat(results);
             }
         });
-
-        // 对搜索结果进行排序：按名称优先，名称相同时按接口源排序
         allResults.sort((a, b) => {
-            // 首先按照视频名称排序
             const nameCompare = (a.vod_name || '').localeCompare(b.vod_name || '');
             if (nameCompare !== 0) return nameCompare;
-            
-            // 如果名称相同，则按照来源排序
             return (a.source_name || '').localeCompare(b.source_name || '');
         });
-
-        // 更新搜索结果计数
+        // 分頁邏輯
+        const pageSize = 20; // 每頁顯示數量
+        totalPages = Math.ceil(allResults.length / pageSize) || 1;
+        currentPage = page;
+        lastQuery = query;
+        lastResults = allResults;
+        // 只顯示當前頁的結果
+        const pagedResults = allResults.slice((page - 1) * pageSize, page * pageSize);
+        // 更新搜尋結果計數
         const searchResultsCount = document.getElementById('searchResultsCount');
         if (searchResultsCount) {
             searchResultsCount.textContent = allResults.length;
         }
-
-        // 显示结果区域，调整搜索区域
         document.getElementById('searchArea').classList.remove('flex-1');
         document.getElementById('searchArea').classList.add('mb-8');
         document.getElementById('resultsArea').classList.remove('hidden');
-
-        // 隐藏豆瓣推荐区域（如果存在）
         const doubanArea = document.getElementById('doubanArea');
         if (doubanArea) {
             doubanArea.classList.add('hidden');
         }
-
         const resultsDiv = document.getElementById('results');
-
-        // 如果没有结果
-        if (!allResults || allResults.length === 0) {
+        if (!pagedResults || pagedResults.length === 0) {
             resultsDiv.innerHTML = `
                 <div class="col-span-full text-center py-16">
                     <svg class="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                               d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <h3 class="mt-2 text-lg font-medium text-gray-400">没有找到匹配的结果</h3>
-                    <p class="mt-1 text-sm text-gray-500">请尝试其他关键词或更换数据源</p>
+                    <h3 class="mt-2 text-lg font-medium text-gray-400">沒有找到匹配的結果</h3>
+                    <p class="mt-1 text-sm text-gray-500">請嘗試其他關鍵詞或更換數據源</p>
                 </div>
             `;
+            renderPagination(page, totalPages);
             hideLoading();
             return;
         }
-
-        // 有搜索结果时，才更新URL
+        // 有搜尋結果時，才更新URL
         try {
-            // 使用URI编码确保特殊字符能够正确显示
             const encodedQuery = encodeURIComponent(query);
-            // 使用HTML5 History API更新URL，不刷新页面
             window.history.pushState(
                 { search: query },
-                `搜索: ${query} - LibreTV`,
+                `搜尋: ${query} - LibreTV`,
                 `/s=${encodedQuery}`
             );
-            // 更新页面标题
-            document.title = `搜索: ${query} - LibreTV`;
+            document.title = `搜尋: ${query} - LibreTV`;
         } catch (e) {
-            console.error('更新浏览器历史失败:', e);
-            // 如果更新URL失败，继续执行搜索
+            console.error('更新瀏覽器歷史失敗:', e);
         }
-
-        // 处理搜索结果过滤：如果启用了黄色内容过滤，则过滤掉分类含有敏感内容的项目
+        // 黃色內容過濾
         const yellowFilterEnabled = localStorage.getItem('yellowFilterEnabled') === 'true';
+        let filteredResults = pagedResults;
         if (yellowFilterEnabled) {
             const banned = ['伦理片', '福利', '里番动漫', '门事件', '萝莉少女', '制服诱惑', '国产传媒', 'cosplay', '黑丝诱惑', '无码', '日本无码', '有码', '日本有码', 'SWAG', '网红主播', '色情片', '同性片', '福利视频', '福利片'];
-            allResults = allResults.filter(item => {
+            filteredResults = pagedResults.filter(item => {
                 const typeName = item.type_name || '';
                 return !banned.some(keyword => typeName.includes(keyword));
             });
         }
-
-        // 添加XSS保护，使用textContent和属性转义
-        const safeResults = allResults.map(item => {
-            const safeId = item.vod_id ? item.vod_id.toString().replace(/[^\w-]/g, '') : '';
-            const safeName = (item.vod_name || '').toString()
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
-            const sourceInfo = item.source_name ?
-                `<span class="bg-[#222] text-xs px-1.5 py-0.5 rounded-full">${item.source_name}</span>` : '';
-            const sourceCode = item.source_code || '';
-
-            // 添加API URL属性，用于详情获取
-            const apiUrlAttr = item.api_url ?
-                `data-api-url="${item.api_url.replace(/"/g, '&quot;')}"` : '';
-
-            // 修改为水平卡片布局，图片在左侧，文本在右侧，并优化样式
-            const hasCover = item.vod_pic && item.vod_pic.startsWith('http');
-
+        // 渲染當前頁結果
+        const safeResults = filteredResults.map(item => {
+            const safeId = (item.vod_id || '').toString().replace(/</g, '&lt;');
+            const safeName = (item.vod_name || '').toString().replace(/</g, '&lt;');
+            const sourceCode = (item.source_code || '').toString().replace(/</g, '&lt;');
+            const hasCover = !!item.vod_pic;
+            const apiUrlAttr = item.api_url ? `data-api-url="${item.api_url}"` : '';
+            const sourceInfo = item.source_name ? `<span class="text-xs text-gray-400">${item.source_name}</span>` : '';
+            // 修正型號: 條件運算式分開處理
+            let typeNameHtml = '';
+            if ((item.type_name || '').toString().replace(/</g, '&lt;')) {
+                typeNameHtml = `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-blue-500 text-blue-300">${(item.type_name || '').toString().replace(/</g, '&lt;')}</span>`;
+            }
+            let yearHtml = '';
+            if (item.vod_year) {
+                yearHtml = `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-purple-500 text-purple-300">${item.vod_year}</span>`;
+            }
+            // 我的最愛愛心按鈕
+            const favClass = isFavoriteByTitle(safeName) ? 'text-pink-500' : 'text-gray-400';
+            const favBtn = `<button class="favorite-btn absolute top-2 right-2 z-10" onclick="toggleFavoriteCard('${item.vod_id}', this)" aria-label="加入/移除最愛">
+                <svg class="w-6 h-6 ${favClass}" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21C12 21 4 13.5 4 8.5C4 5.42 6.42 3 9.5 3C11.24 3 12.91 3.81 14 5.08C15.09 3.81 16.76 3 18.5 3C21.58 3 24 5.42 24 8.5C24 13.5 16 21 16 21H12Z"/></svg>
+            </button>`;
             return `
-                <div class="card-hover bg-[#111] rounded-lg overflow-hidden cursor-pointer transition-all hover:scale-[1.02] h-full shadow-sm hover:shadow-md" 
+                <div class="card-hover bg-[#111] rounded-lg overflow-hidden cursor-pointer transition-all hover:scale-[1.02] h-full shadow-sm hover:shadow-md relative" 
                      onclick="showDetails('${safeId}','${safeName}','${sourceCode}')" ${apiUrlAttr}>
+                    ${favBtn}
                     <div class="flex h-full">
                         ${hasCover ? `
                         <div class="relative flex-shrink-0 search-card-img-container">
                             <img src="${item.vod_pic}" alt="${safeName}" 
                                  class="h-full w-full object-cover transition-transform hover:scale-110" 
-                                 onerror="this.onerror=null; this.src='https://via.placeholder.com/300x450?text=无封面'; this.classList.add('object-contain');" 
+                                 onerror="this.onerror=null; this.src='https://via.placeholder.com/300x450?text=無封面'; this.classList.add('object-contain');" 
                                  loading="lazy">
                             <div class="absolute inset-0 bg-gradient-to-r from-black/30 to-transparent"></div>
                         </div>` : ''}
@@ -766,53 +795,33 @@ async function search() {
                                 <h3 class="font-semibold mb-2 break-words line-clamp-2 ${hasCover ? '' : 'text-center'}" title="${safeName}">${safeName}</h3>
                                 
                                 <div class="flex flex-wrap ${hasCover ? '' : 'justify-center'} gap-1 mb-2">
-                                    ${(item.type_name || '').toString().replace(/</g, '&lt;') ?
-                    `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-blue-500 text-blue-300">
-                                          ${(item.type_name || '').toString().replace(/</g, '&lt;')}
-                                      </span>` : ''}
-                                    ${(item.vod_year || '') ?
-                    `<span class="text-xs py-0.5 px-1.5 rounded bg-opacity-20 bg-purple-500 text-purple-300">
-                                          ${item.vod_year}
-                                      </span>` : ''}
+                                    ${typeNameHtml}
+                                    ${yearHtml}
                                 </div>
                                 <p class="text-gray-400 line-clamp-2 overflow-hidden ${hasCover ? '' : 'text-center'} mb-2">
-                                    ${(item.vod_remarks || '暂无介绍').toString().replace(/</g, '&lt;')}
+                                    ${(item.vod_remarks || '暫無介紹').toString().replace(/</g, '&lt;')}
                                 </p>
                             </div>
                             
                             <div class="flex justify-between items-center mt-1 pt-1 border-t border-gray-800">
                                 ${sourceInfo ? `<div>${sourceInfo}</div>` : '<div></div>'}
-                                <!-- 接口名称过长会被挤变形
-                                <div>
-                                    <span class="text-gray-500 flex items-center hover:text-blue-400 transition-colors">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                        </svg>
-                                        播放
-                                    </span>
-                                </div>
-                                -->
                             </div>
                         </div>
                     </div>
                 </div>
             `;
         }).join('');
-
         resultsDiv.innerHTML = safeResults;
-    } catch (error) {
-        console.error('搜索错误:', error);
-        if (error.name === 'AbortError') {
-            showToast('搜索请求超时，请检查网络连接', 'error');
-        } else {
-            showToast('搜索请求失败，请稍后重试', 'error');
-        }
-    } finally {
+        renderPagination(page, totalPages);
         hideLoading();
+    } catch (error) {
+        hideLoading();
+        showToast('搜尋失敗，請稍後重試', 'error');
+        console.error('搜尋失敗:', error);
     }
 }
+window.search = search;
 
-// 切换清空按钮的显示状态
 function toggleClearButton() {
     const searchInput = document.getElementById('searchInput');
     const clearButton = document.getElementById('clearSearchInput');
@@ -822,6 +831,7 @@ function toggleClearButton() {
         clearButton.classList.add('hidden');
     }
 }
+window.toggleClearButton = toggleClearButton;
 
 // 清空搜索框内容
 function clearSearchInput() {
@@ -1354,5 +1364,122 @@ function saveStringAsFile(content, fileName) {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
 }
+
+// 我的最愛功能
+function getFavorites() {
+    try {
+        return JSON.parse(localStorage.getItem('favoritesList') || '[]');
+    } catch {
+        return [];
+    }
+}
+function saveFavorites(list) {
+    localStorage.setItem('favoritesList', JSON.stringify(list));
+}
+function isFavoriteByTitle(title) {
+    return getFavorites().some(item => item.title === title);
+}
+function addFavorite(item) {
+    const list = getFavorites();
+    if (!list.some(fav => fav.vod_id === item.vod_id)) {
+        list.unshift(item);
+        saveFavorites(list);
+        renderFavoritesList();
+    }
+}
+function removeFavorite(id) {
+    let list = getFavorites();
+    list = list.filter(item => item.vod_id !== id);
+    saveFavorites(list);
+    renderFavoritesList();
+}
+function clearFavorites() {
+    localStorage.removeItem('favoritesList');
+    renderFavoritesList();
+    // 不再自動刷新卡片頁面，僅更新側欄
+}
+function toggleFavorites() {
+    const panel = document.getElementById('favoritesPanel');
+    if (!panel) return;
+    if (panel.classList.contains('-translate-x-full')) {
+        panel.classList.remove('-translate-x-full');
+        panel.setAttribute('aria-hidden', 'false');
+        renderFavoritesList();
+    } else {
+        panel.classList.add('-translate-x-full');
+        panel.setAttribute('aria-hidden', 'true');
+        // 關閉側欄時刷新熱門標籤卡片，並同步狀態
+        if (typeof renderRecommend === 'function') {
+            if (typeof window.doubanCurrentTag !== 'undefined') window.doubanCurrentTag = '热门';
+            if (typeof window.doubanCurrentPage !== 'undefined') window.doubanCurrentPage = 1;
+            if (typeof window.doubanPageStart !== 'undefined') window.doubanPageStart = 0;
+            if (typeof window.renderDoubanTags === 'function') window.renderDoubanTags();
+            renderRecommend('热门', window.doubanPageSize || 20, 0);
+        }
+    }
+}
+function renderFavoritesList() {
+    let list = getFavorites();
+    // 只保留唯一 title
+    const seen = new Set();
+    list = list.filter(item => {
+        if (seen.has(item.title)) return false;
+        seen.add(item.title);
+        return true;
+    });
+    const container = document.getElementById('favoritesList');
+    if (!container) return;
+    if (!list.length) {
+        container.innerHTML = '<div class="text-center text-gray-500 py-8">暫無收藏</div>';
+        return;
+    }
+    container.innerHTML = list.map(item => {
+        const safeName = (item.title || '').replace(/</g, '&lt;');
+        const cover = item.cover || '';
+        return `<div class='flex items-center gap-3 mb-4 cursor-pointer group' onclick="fillAndSearchWithDouban('${safeName}')">
+            <img src='${cover}' alt='${safeName}' class='w-12 h-16 object-cover rounded'/>
+            <div class='flex-1'>
+                <div class='font-bold text-white line-clamp-1 group-hover:text-pink-400'>${safeName}</div>
+                <div class='text-xs text-gray-400 line-clamp-1'>${item.type || ''}</div>
+            </div>
+            <button onclick="event.stopPropagation(); removeFavoriteByTitle('${safeName}')" class='text-pink-500 hover:text-red-500 text-xl' title='移除最愛'>
+                <svg class='w-6 h-6' fill='currentColor' viewBox='0 0 24 24'><path d='M12 21C12 21 4 13.5 4 8.5C4 5.42 6.42 3 9.5 3C11.24 3 12.91 3.81 14 5.08C15.09 3.81 16.76 3 18.5 3C21.58 3 24 5.42 24 8.5C24 13.5 16 21 16 21H12Z'/></svg>
+            </button>
+        </div>`;
+    }).join('');
+}
+window.removeFavoriteByTitle = function(title) {
+    let list = getFavorites();
+    list = list.filter(item => item.title !== title);
+    localStorage.setItem('favoritesList', JSON.stringify(list));
+    renderFavoritesList();
+    // 不再自動刷新卡片頁面，僅更新側欄
+};
+
+// 修改 toggleFavoriteCard，title 為唯一 key
+window.toggleFavoriteCard = function(id, btn) {
+    // 以 title 為唯一 key
+    const item = lastResults.find(i => i.vod_id === id);
+    if (!item) return;
+    const title = item.vod_name || item.title;
+    const cover = item.vod_pic || item.cover || '';
+    const rate = item.vod_score || item.rate || '';
+    const url = item.url || '';
+    const type = item.type_name || item.type || '';
+    const fav = getFavorites();
+    const idx = fav.findIndex(f => f.title === title);
+    if (idx === -1) {
+        fav.unshift({ title, cover, rate, url, type });
+        btn.querySelector('svg').classList.remove('text-gray-400');
+        btn.querySelector('svg').classList.add('text-pink-500');
+    } else {
+        fav.splice(idx, 1);
+        btn.querySelector('svg').classList.remove('text-pink-500');
+        btn.querySelector('svg').classList.add('text-gray-400');
+    }
+    localStorage.setItem('favoritesList', JSON.stringify(fav));
+    renderFavoritesList();
+    // 不再自動刷新卡片頁面，僅更新側欄
+};
 
 // 移除Node.js的require语句，因为这是在浏览器环境中运行的

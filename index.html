@@ -19,10 +19,16 @@
 </head>
 <body class="page-bg text-white">
     <!-- 将历史记录按钮移到左上角，并缩小尺寸 -->
-    <div class="fixed top-4 left-4 z-10">
+    <div class="fixed top-4 left-4 z-10 flex gap-2">
         <button onclick="toggleHistory(event)" class="bg-[#222] hover:bg-[#333] border border-[#333] hover:border-white rounded-lg px-3 py-1.5 transition-colors" aria-label="观看历史">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+        </button>
+        <!-- 我的最愛按鈕 -->
+        <button onclick="toggleFavorites(event)" class="bg-[#222] hover:bg-[#333] border border-[#333] hover:border-pink-500 rounded-lg px-3 py-1.5 transition-colors" aria-label="我的最愛">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path id="favoritesIconPath" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 21C12 21 4 13.5 4 8.5C4 5.42 6.42 3 9.5 3C11.24 3 12.91 3.81 14 5.08C15.09 3.81 16.76 3 18.5 3C21.58 3 24 5.42 24 8.5C24 13.5 16 21 16 21H12Z"/>
             </svg>
         </button>
     </div>
@@ -180,6 +186,27 @@
         </div>
     </div>
 
+    <!-- 我的最愛側欄 -->
+    <div id="favoritesPanel" class="history-panel fixed left-0 top-0 h-full bg-[#111] border-r border-[#333] p-6 z-40 transform -translate-x-full transition-transform duration-300" aria-label="我的最愛" aria-hidden="true">
+        <div class="flex justify-between items-center mb-6">
+            <button onclick="toggleFavorites()" class="close-btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+            <h3 class="text-xl font-bold gradient-text mx-auto">我的最愛</h3>
+            <div class="w-4"></div>
+        </div>
+        <div id="favoritesList" class="pb-4">
+            <div class="text-center text-gray-500 py-8">暫無收藏</div>
+        </div>
+        <div class="mt-4 text-center sticky bottom-0 pb-2 pt-2 bg-[#111]">
+            <button onclick="clearFavorites()" class="px-4 py-2 w-full bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 hover:from-pink-600 hover:via-red-600 hover:to-yellow-600 text-white rounded-lg text-sm transition-all duration-300 shadow-md hover:shadow-lg">
+                清空我的最愛
+            </button>
+        </div>
+    </div>
+
     <div class="container mx-auto px-4 py-8 flex flex-col h-screen">
         <div class="flex-1 flex flex-col">
             <!-- 网站标志和口号 -->
@@ -254,7 +281,7 @@
                                 </div>
                             </div>
                             <button id="douban-refresh" class="text-sm px-3 py-1 bg-pink-600 hover:bg-pink-700 text-white rounded-lg flex items-center gap-1">
-                                <span>换一批</span>
+                                <span>換一批</span>
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
@@ -268,6 +295,8 @@
                     
                     <!-- 推荐内容 -->
                     <div id="douban-results" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3"></div>
+                    <!-- 豆瓣分頁按鈕容器 -->
+                    <div id="douban-pagination" class="flex justify-center items-center mt-6 gap-2"></div>
                 </div>
             </div>
             
@@ -283,6 +312,8 @@
                     <div id="results" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         <!-- 结果将在这里动态生成 -->
                     </div>
+                    <!-- 分頁按鈕容器 -->
+                    <div id="pagination" class="flex justify-center items-center mt-6 gap-2"></div>
                 </div>
             </div>
         </div>
@@ -405,6 +436,7 @@
     </script>
 
     <!-- 引入纯 JS sha256（HTTP 下依然可用） -->
+    <script src="libs/zhconver.js"></script>
     <script src="libs/sha256.min.js"></script>
     <script>
         // 保存原始 js‑sha256 实现，避免被 password.js 覆盖
