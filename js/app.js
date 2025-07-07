@@ -773,7 +773,7 @@ async function search(queryParam, pageParam) {
             }
             // 我的最愛愛心按鈕
             const favClass = isFavoriteByTitle(safeName) ? 'text-pink-500' : 'text-gray-400';
-            const favBtn = `<button class="favorite-btn absolute top-2 right-2 z-10" onclick="toggleFavoriteCard('${item.vod_id}', this)" aria-label="加入/移除最愛">
+            const favBtn = `<button class="favorite-btn absolute top-2 right-2 z-10" data-title="${safeName}" onclick="toggleFavoriteCardByTitle(event, '${safeName}')" aria-label="加入/移除最愛">
                 <svg class="w-6 h-6 ${favClass}" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21C12 21 4 13.5 4 8.5C4 5.42 6.42 3 9.5 3C11.24 3 12.91 3.81 14 5.08C15.09 3.81 16.76 3 18.5 3C21.58 3 24 5.42 24 8.5C24 13.5 16 21 16 21H12Z"/></svg>
             </button>`;
             return `
@@ -1240,6 +1240,11 @@ async function importConfigFromUrl() {
                 localStorage.setItem(item, config.data[item]);
             }
 
+            // 若有 favoritesList，刷新我的最愛 UI
+            if (config.data.favoritesList !== undefined) {
+                renderFavoritesList && renderFavoritesList();
+            }
+
             showToast('配置文件导入成功，3 秒后自动刷新本页面。', 'success');
             setTimeout(() => {
                 window.location.reload();
@@ -1292,6 +1297,11 @@ async function importConfig() {
                 localStorage.setItem(item, config.data[item]);
             }
 
+            // 若有 favoritesList，刷新我的最愛 UI
+            if (config.data.favoritesList !== undefined) {
+                renderFavoritesList && renderFavoritesList();
+            }
+
             showToast('配置文件导入成功，3 秒后自动刷新本页面。', 'success');
             setTimeout(() => {
                 window.location.reload();
@@ -1335,6 +1345,12 @@ async function exportConfig() {
     const searchHistory = localStorage.getItem(SEARCH_HISTORY_KEY);
     if (searchHistory) {
         items[SEARCH_HISTORY_KEY] = searchHistory;
+    }
+
+    // 導出我的最愛
+    const favoritesList = localStorage.getItem('favoritesList');
+    if (favoritesList) {
+        items['favoritesList'] = favoritesList;
     }
 
     const times = Date.now().toString();
@@ -1456,30 +1472,48 @@ window.removeFavoriteByTitle = function(title) {
     // 不再自動刷新卡片頁面，僅更新側欄
 };
 
-// 修改 toggleFavoriteCard，title 為唯一 key
-window.toggleFavoriteCard = function(id, btn) {
-    // 以 title 為唯一 key
-    const item = lastResults.find(i => i.vod_id === id);
-    if (!item) return;
-    const title = item.vod_name || item.title;
-    const cover = item.vod_pic || item.cover || '';
-    const rate = item.vod_score || item.rate || '';
-    const url = item.url || '';
-    const type = item.type_name || item.type || '';
+// 新增：所有同名卡片愛心同步變色
+window.updateAllFavoriteHearts = function() {
+    const favBtns = document.querySelectorAll('.favorite-btn[data-title]');
+    favBtns.forEach(btn => {
+        const title = btn.getAttribute('data-title');
+        const svg = btn.querySelector('svg');
+        if (!svg) return;
+        if (isFavoriteByTitle(title)) {
+            svg.classList.add('text-pink-500');
+            svg.classList.remove('text-gray-400');
+        } else {
+            svg.classList.remove('text-pink-500');
+            svg.classList.add('text-gray-400');
+        }
+    });
+};
+
+// 新增：以 title 為唯一 key 加入/移除最愛
+window.toggleFavoriteCardByTitle = function(event, title) {
+    console.log('toggleFavoriteCardByTitle', event, title);
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
     const fav = getFavorites();
     const idx = fav.findIndex(f => f.title === title);
     if (idx === -1) {
-        fav.unshift({ title, cover, rate, url, type });
-        btn.querySelector('svg').classList.remove('text-gray-400');
-        btn.querySelector('svg').classList.add('text-pink-500');
+        // 取第一個同名卡片的資料
+        const item = lastResults.find(i => (i.vod_name || i.title) === title);
+        if (item) {
+            const cover = item.vod_pic || item.cover || '';
+            const rate = item.vod_score || item.rate || '';
+            const url = item.url || '';
+            const type = item.type_name || item.type || '';
+            fav.unshift({ title, cover, rate, url, type });
+        }
     } else {
         fav.splice(idx, 1);
-        btn.querySelector('svg').classList.remove('text-pink-500');
-        btn.querySelector('svg').classList.add('text-gray-400');
     }
     localStorage.setItem('favoritesList', JSON.stringify(fav));
     renderFavoritesList();
-    // 不再自動刷新卡片頁面，僅更新側欄
+    updateAllFavoriteHearts();
 };
 
 // 移除Node.js的require语句，因为这是在浏览器环境中运行的
