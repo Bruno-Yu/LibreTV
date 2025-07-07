@@ -1,35 +1,8 @@
 // 页面加载后显示弹窗脚本
 document.addEventListener('DOMContentLoaded', function() {
-    // 弹窗显示脚本
-    // 检查用户是否已经看过声明
-    const hasSeenDisclaimer = localStorage.getItem('hasSeenDisclaimer');
-    
-    if (!hasSeenDisclaimer) {
-        // 显示弹窗
-        const disclaimerModal = document.getElementById('disclaimerModal');
-        disclaimerModal.style.display = 'flex';
-        
-        // 取得同意按鈕
-        const acceptBtn = document.getElementById('acceptDisclaimerBtn');
-        // 讓按鈕可聚焦
-        acceptBtn.tabIndex = 0;
-        // 彈窗顯示時自動聚焦按鈕
-        setTimeout(() => { acceptBtn.focus(); }, 100);
-        // 支援鍵盤 Enter/Space 觸發點擊
-        acceptBtn.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' || e.key === ' ' || e.keyCode === 13 || e.keyCode === 32) {
-                e.preventDefault();
-                acceptBtn.click();
-            }
-        });
-        // 添加接受按钮事件
-        acceptBtn.addEventListener('click', function() {
-            // 保存用户已看过声明的状态
-            localStorage.setItem('hasSeenDisclaimer', 'true');
-            // 隐藏弹窗
-            disclaimerModal.style.display = 'none';
-        });
-    }
+    // 直接隱藏使用聲明彈窗
+    const disclaimerModal = document.getElementById('disclaimerModal');
+    if (disclaimerModal) disclaimerModal.style.display = 'none';
 
     // URL搜索参数处理脚本
     // 首先检查是否是播放URL格式 (/watch 开头的路径)
