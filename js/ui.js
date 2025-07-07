@@ -963,3 +963,99 @@ function showImportBox(fun) {
         fun(fileInput.files[0]);
     });
 }
+
+/**
+ * 讓主內容所有可點擊元素都自動加上 .tv-focusable class
+ * 支援 TV/鍵盤聚焦與方向鍵移動
+ */
+function markMainContentFocusable() {
+  // 主內容、input、標籤、切換按鈕等
+  document.querySelectorAll('#results .card-hover, #douban-results [class*="bg-"], #favoritesList > div, #resultsArea [onclick], #douban-results [onclick], input, textarea, select, .tag-btn, .category-btn, .switch-btn, #douban-tags button, #douban-movie-toggle, #douban-tv-toggle').forEach(el => {
+    if (!el.classList.contains('tv-focusable')) {
+      el.classList.add('tv-focusable');
+      el.tabIndex = 0;
+    }
+  });
+}
+
+// 修改 enableTVRemoteForClickable，優先處理 .tv-focusable
+function enableTVRemoteForClickable() {
+  markMainContentFocusable();
+  // 支援所有主內容、input、標籤、切換按鈕、[onclick]
+  const clickableSelector = '.tv-focusable, input, textarea, select, [onclick]';
+  const allClickable = document.querySelectorAll(clickableSelector);
+  allClickable.forEach(el => {
+    el.tabIndex = 0;
+    if (!el.dataset.tvHandled) {
+      el.addEventListener('keydown', function(e) {
+        // 支援 Enter/Space
+        if ((e.key === 'Enter' || e.key === ' ' || e.keyCode === 13 || e.keyCode === 32) && (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT')) {
+          e.preventDefault();
+          el.click();
+        }
+        // 空間聚焦
+        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+          e.preventDefault();
+          moveFocusSpatial(el, e.key, clickableSelector);
+        }
+      });
+      el.dataset.tvHandled = '1';
+    }
+  });
+  // 載入時自動聚焦主內容第一個 .tv-focusable
+  if (allClickable.length > 0 && (!document.activeElement || document.activeElement === document.body || !document.activeElement.classList.contains('tv-focusable'))) {
+    allClickable[0].focus();
+  }
+}
+
+/**
+ * 空間聚焦：根據方向鍵與元素座標，選擇最近的目標
+ * @param {HTMLElement} currentEl
+ * @param {string} direction
+ * @param {string} selector
+ */
+function moveFocusSpatial(currentEl, direction, selector = '.tv-focusable, input, textarea, select, [onclick]') {
+  const els = Array.from(document.querySelectorAll(selector));
+  if (els.length < 2) return;
+  const rect = currentEl.getBoundingClientRect();
+  let minDist = Infinity;
+  let target = null;
+  els.forEach(el => {
+    if (el === currentEl) return;
+    const r = el.getBoundingClientRect();
+    let isCandidate = false;
+    let dist = Infinity;
+    if (direction === 'ArrowLeft' && r.right <= rect.left - 1) {
+      dist = Math.abs(rect.top - r.top) + (rect.left - r.right);
+      isCandidate = true;
+    }
+    if (direction === 'ArrowRight' && r.left >= rect.right + 1) {
+      dist = Math.abs(rect.top - r.top) + (r.left - rect.right);
+      isCandidate = true;
+    }
+    if (direction === 'ArrowUp' && r.bottom <= rect.top - 1) {
+      dist = Math.abs(rect.left - r.left) + (rect.top - r.bottom);
+      isCandidate = true;
+    }
+    if (direction === 'ArrowDown' && r.top >= rect.bottom + 1) {
+      dist = Math.abs(rect.left - r.left) + (r.top - rect.bottom);
+      isCandidate = true;
+    }
+    if (isCandidate && dist < minDist) {
+      minDist = dist;
+      target = el;
+    }
+  });
+  if (target) target.focus();
+}
+
+// 頁面載入與 DOM 變動時都要執行
+if (typeof window !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', function() {
+    enableTVRemoteForClickable();
+  });
+  const observer = new MutationObserver(function() {
+    enableTVRemoteForClickable();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}

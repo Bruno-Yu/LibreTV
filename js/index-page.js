@@ -9,8 +9,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const disclaimerModal = document.getElementById('disclaimerModal');
         disclaimerModal.style.display = 'flex';
         
+        // 取得同意按鈕
+        const acceptBtn = document.getElementById('acceptDisclaimerBtn');
+        // 讓按鈕可聚焦
+        acceptBtn.tabIndex = 0;
+        // 彈窗顯示時自動聚焦按鈕
+        setTimeout(() => { acceptBtn.focus(); }, 100);
+        // 支援鍵盤 Enter/Space 觸發點擊
+        acceptBtn.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ' || e.keyCode === 13 || e.keyCode === 32) {
+                e.preventDefault();
+                acceptBtn.click();
+            }
+        });
         // 添加接受按钮事件
-        document.getElementById('acceptDisclaimerBtn').addEventListener('click', function() {
+        acceptBtn.addEventListener('click', function() {
             // 保存用户已看过声明的状态
             localStorage.setItem('hasSeenDisclaimer', 'true');
             // 隐藏弹窗

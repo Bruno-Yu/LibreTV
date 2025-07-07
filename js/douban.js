@@ -551,6 +551,12 @@ function renderDoubanCards(data, container) {
     }
     container.innerHTML = "";
     container.appendChild(fragment);
+    // 主內容渲染後自動聚焦
+    setTimeout(() => {
+      if (typeof enableTVRemoteForClickable === 'function') enableTVRemoteForClickable();
+      const first = document.querySelector('.tv-focusable');
+      if(first) first.focus();
+    }, 0);
 }
 
 // 重置到首页
@@ -896,6 +902,14 @@ function renderDoubanCardsAppend(data, container) {
         fragment.appendChild(card);
     });
     container.appendChild(fragment);
+    // append 新內容後自動聚焦（若目前沒有 focus）
+    setTimeout(() => {
+      if (!document.activeElement || document.activeElement === document.body) {
+        if (typeof enableTVRemoteForClickable === 'function') enableTVRemoteForClickable();
+        const first = document.querySelector('.tv-focusable');
+        if(first) first.focus();
+      }
+    }, 0);
 }
 
 // 我的最愛邏輯：以 title 為唯一 key

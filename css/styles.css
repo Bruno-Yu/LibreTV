@@ -1027,3 +1027,12 @@ body {
         font-size: 0.8rem;
     }
 }
+
+/* 讓所有有 onclick 的元素聚焦時有明顯外框（TV/鍵盤友善） */
+[onclick]:focus {
+  outline: 3px solid #DB2777 !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(219,39,119,0.2);
+  z-index: 9999;
+  transition: outline 0.1s, box-shadow 0.1s;
+}

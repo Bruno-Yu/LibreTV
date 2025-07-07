@@ -814,6 +814,12 @@ async function search(queryParam, pageParam) {
         resultsDiv.innerHTML = safeResults;
         renderPagination(page, totalPages);
         hideLoading();
+        // 主內容渲染後自動聚焦
+        setTimeout(() => {
+          if (typeof enableTVRemoteForClickable === 'function') enableTVRemoteForClickable();
+          const first = document.querySelector('.tv-focusable');
+          if(first) first.focus();
+        }, 0);
     } catch (error) {
         hideLoading();
         showToast('搜尋失敗，請稍後重試', 'error');
